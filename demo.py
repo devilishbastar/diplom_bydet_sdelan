@@ -17,7 +17,9 @@ from omegaconf import OmegaConf
 
 from constants import classes
 
+#Gfgjgnhjfdhnedsgrjiohnedorliytjgnhberdiyjtoghnedyrtgjiohneroitjhneorijhnoeijrtnhijoernthjiporenthjthtertttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt
 
+#dfgjdgjhnsgjdsjgjeg
 class BaseRecognition:
     def __init__(self, model_path: str, tensors_list, prediction_list, verbose):
         self.verbose = verbose
