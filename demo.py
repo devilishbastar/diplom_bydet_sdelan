@@ -4,7 +4,7 @@ import time
 from collections import deque
 from multiprocessing import Manager, Process, Value
 from typing import Optional, Tuple
-
+#привет пацаны
 import onnxruntime as ort
 from loguru import logger
 
