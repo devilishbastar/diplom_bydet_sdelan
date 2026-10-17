@@ -7,7 +7,7 @@ from typing import Optional, Tuple
 #привет пацаны
 import onnxruntime as ort
 from loguru import logger
-
+#привет пацаеыыыыыыы
 ort.set_default_logger_severity(4)  # NOQA
 logger.add(sys.stdout, format="{level} | {message}")  # NOQA
 logger.remove(0)  # NOQA
