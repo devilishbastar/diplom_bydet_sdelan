@@ -80,6 +80,8 @@ optional arguments:
 python demo.py -p <PATH_TO_CONFIG>
 ```
 
+The demo classifies each 32-frame clip as one gesture; it does not transcribe continuous signing into text. With `--mp`, frames waiting for inference are limited to the model's input window, and older frames are discarded so the prediction does not fall further behind the camera. The MViTv2-small-32-2 model reports 64.09% top-1 accuracy on the dataset test split, so live predictions are not expected to be error-free.
+
 ![demo](images/demo.gif)
 
 ## Authors and Credits

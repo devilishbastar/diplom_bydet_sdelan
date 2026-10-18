@@ -2,7 +2,7 @@ import argparse
 import sys
 import time
 from collections import deque
-from multiprocessing import Manager, Process, Value
+from multiprocessing import Event, Lock, Manager, Process, Value
 from typing import Optional, Tuple
 #привет пацаны
 import onnxruntime as ort
@@ -21,7 +21,15 @@ from constants import classes
 
 #dfgjdgjhnsgjdsjgjeg
 class BaseRecognition:
-    def __init__(self, model_path: str, tensors_list, prediction_list, verbose):
+    def __init__(
+        self,
+        model_path: str,
+        tensors_list,
+        prediction_list,
+        verbose,
+        tensors_lock=None,
+        max_frames=None,
+    ):
         self.verbose = verbose
         self.started = None
         self.output_names = None
@@ -32,13 +40,23 @@ class BaseRecognition:
         self.window_size = None
         self.tensors_list = tensors_list
         self.prediction_list = prediction_list
+        self.tensors_lock = tensors_lock
+        self.max_frames = max_frames
 
-    def clear_tensors(self):
-        """
-        Clear the list of tensors.
-        """
-        for _ in range(self.window_size):
-            self.tensors_list.pop(0)
+    def take_latest_window(self):
+        if self.tensors_lock is None:
+            if len(self.tensors_list) < self.window_size:
+                return None
+            frames = self.tensors_list[-self.window_size :]
+            self.tensors_list[:] = []
+            return frames
+
+        with self.tensors_lock:
+            if len(self.tensors_list) < self.window_size:
+                return None
+            frames = list(self.tensors_list[-self.window_size :])
+            self.tensors_list[:] = []
+            return frames
 
     def run(self):
         """
@@ -50,9 +68,12 @@ class BaseRecognition:
             self.input_shape = self.session.get_inputs()[0].shape
             self.window_size = self.input_shape[3]
             self.output_names = [output.name for output in self.session.get_outputs()]
+            if self.max_frames is not None:
+                self.max_frames.value = self.window_size
 
-        if len(self.tensors_list) >= self.input_shape[3]:
-            input_tensor = np.stack(self.tensors_list[: self.window_size], axis=1)[None][None]
+        frames = self.take_latest_window()
+        if frames is not None:
+            input_tensor = np.stack(frames, axis=1)[None][None]
             st = time.time()
             outputs = self.session.run(self.output_names, {self.input_name: input_tensor.astype(np.float32)})[0]
             et = round(time.time() - st, 3)
@@ -60,7 +81,6 @@ class BaseRecognition:
             if gloss != self.prediction_list[-1] and len(self.prediction_list):
                 if gloss != "---":
                     self.prediction_list.append(gloss)
-            self.clear_tensors()
             if self.verbose:
                 logger.info(f"- Prediction time {et}, new gloss: {gloss}")
                 logger.info(f" --- {len(self.tensors_list)} frames in queue")
@@ -97,7 +117,7 @@ class Recognition(BaseRecognition):
 
 
 class RecognitionMP(Process, BaseRecognition):
-    def __init__(self, model_path: str, tensors_list, prediction_list, verbose):
+    def __init__(self, model_path: str, tensors_list, prediction_list, verbose, tensors_lock, max_frames):
         """
         Initialize recognition model.
 
@@ -116,14 +136,25 @@ class RecognitionMP(Process, BaseRecognition):
         """
         super().__init__()
         BaseRecognition.__init__(
-            self, model_path=model_path, tensors_list=tensors_list, prediction_list=prediction_list, verbose=verbose
+            self,
+            model_path=model_path,
+            tensors_list=tensors_list,
+            prediction_list=prediction_list,
+            verbose=verbose,
+            tensors_lock=tensors_lock,
+            max_frames=max_frames,
         )
         self.started = Value("i", False)
+        self.stop_event = Event()
 
     def run(self):
-        while True:
+        while not self.stop_event.is_set():
             BaseRecognition.run(self)
-            self.started = True
+            self.started.value = True
+
+    def kill(self):
+        self.stop_event.set()
+        self.join()
 
 
 class Runner:
@@ -159,6 +190,8 @@ class Runner:
         self.manager = Manager() if self.multiprocess else None
         self.tensors_list = self.manager.list() if self.multiprocess else []
         self.prediction_list = self.manager.list() if self.multiprocess else []
+        self.tensors_lock = Lock() if self.multiprocess else None
+        self.max_frames = Value("i", 0) if self.multiprocess else None
         self.prediction_list.append("---")
         self.frame_counter = 0
         self.frame_interval = config.frame_interval
@@ -167,7 +200,14 @@ class Runner:
         self.mean = config.mean
         self.std = config.std
         if self.multiprocess:
-            self.recognizer = RecognitionMP(model_path, self.tensors_list, self.prediction_list, verbose)
+            self.recognizer = RecognitionMP(
+                model_path,
+                self.tensors_list,
+                self.prediction_list,
+                verbose,
+                self.tensors_lock,
+                self.max_frames,
+            )
         else:
             self.recognizer = Recognition(model_path, self.tensors_list, self.prediction_list, verbose)
 
@@ -186,7 +226,14 @@ class Runner:
             image = self.resize(image, (224, 224))
             image = (image - self.mean) / self.std
             image = np.transpose(image, [2, 0, 1])
-            self.tensors_list.append(image)
+            if self.tensors_lock is None:
+                self.tensors_list.append(image)
+            else:
+                with self.tensors_lock:
+                    self.tensors_list.append(image)
+                    overflow = len(self.tensors_list) - self.max_frames.value
+                    if overflow > 0:
+                        del self.tensors_list[:overflow]
             self.frame_counter = 0
 
     @staticmethod
@@ -239,31 +286,33 @@ class Runner:
             self.recognizer.start()
 
         while self.cap.isOpened():
-            if self.recognizer.started:
-                _, frame = self.cap.read()
-                frame = cv2.flip(frame, 1)
-                text_div = np.zeros((50, frame.shape[1], 3), dtype=np.uint8)
+            recognition_ready = (
+                self.recognizer.started.value if self.multiprocess else self.recognizer.started
+            )
+            _, frame = self.cap.read()
+            frame = cv2.flip(frame, 1)
+            text_div = np.zeros((50, frame.shape[1], 3), dtype=np.uint8)
+            if recognition_ready:
                 self.add_frame(frame)
-
                 if not self.multiprocess:
                     self.recognizer.start()
 
-                if self.prediction_list:
-                    text = "  ".join(self.prediction_list)
-                    cv2.putText(text_div, text, (10, 30), cv2.FONT_HERSHEY_COMPLEX, 0.7, (255, 255, 255), 2)
+            if self.prediction_list:
+                text = "  ".join(self.prediction_list)
+                cv2.putText(text_div, text, (10, 30), cv2.FONT_HERSHEY_COMPLEX, 0.7, (255, 255, 255), 2)
 
-                if len(self.prediction_list) > self.length:
-                    self.prediction_list.pop(0)
+            if len(self.prediction_list) > self.length:
+                self.prediction_list.pop(0)
 
-                frame = np.concatenate((frame, text_div), axis=0)
-                cv2.imshow("frame", frame)
-                condition = cv2.waitKey(10) & 0xFF
-                if condition in {ord("q"), ord("Q"), 27}:
-                    if self.multiprocess:
-                        self.recognizer.kill()
-                    self.cap.release()
-                    cv2.destroyAllWindows()
-                    break
+            frame = np.concatenate((frame, text_div), axis=0)
+            cv2.imshow("frame", frame)
+            condition = cv2.waitKey(10) & 0xFF
+            if condition in {ord("q"), ord("Q"), 27}:
+                if self.multiprocess:
+                    self.recognizer.kill()
+                self.cap.release()
+                cv2.destroyAllWindows()
+                break
 
 
 def parse_arguments(params: Optional[Tuple] = None) -> argparse.Namespace:
