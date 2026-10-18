@@ -241,6 +241,7 @@ class Runner:
         while self.cap.isOpened():
             if self.recognizer.started:
                 _, frame = self.cap.read()
+                frame = cv2.flip(frame, 1)
                 text_div = np.zeros((50, frame.shape[1], 3), dtype=np.uint8)
                 self.add_frame(frame)
 
