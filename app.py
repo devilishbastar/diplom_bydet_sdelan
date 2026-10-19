@@ -24,22 +24,9 @@ def main(config_path):
     )
 
     gestures_deque = deque(maxlen=5)
-
-    # Set up Streamlit interface
-    st.title("Sign Language Recognition Demo")
     image_place = st.empty()
     text_output = st.empty()
     last_5_gestures = st.empty()
-    st.markdown(
-        """
-
-        This application is designed to recognize sign language using a webcam feed.
-        The model has been trained to recognize various sign language gestures and display the corresponding text in real-time.
-
-        This demo app is based on code here: https://github.com/ai-forever/easy_sign
-        The project is open for collaboration. If you have any suggestions or want to contribute, please feel free to reach out.
-        """
-    )
 
     while True:
         if webrtc_ctx.video_receiver:
