@@ -20,7 +20,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Глобальный инференс-поток (один экземпляр, общий для всех клиентов)
 inference_thread = SLInference("configs/config.json")
 inference_thread.start()
 
@@ -31,33 +30,28 @@ async def websocket_endpoint(websocket: WebSocket):
 
     try:
         while True:
-            # Принимаем бинарные данные кадра (JPEG)
+            
             data = await websocket.receive_bytes()
 
-            # Декодируем в numpy array
             nparr = np.frombuffer(data, np.uint8)
-            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)  # BGR
+            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             if frame is None:
                 continue
 
-            # Приводим к RGB и изменяем размер до 224x224 (соответствует вашей модели)
+            
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             frame_resized = cv2.resize(frame_rgb, (224, 224))
 
-            # Помещаем в вашу очередь SLInference
             inference_thread.input_queue.append(frame_resized)
 
-            # Получаем текущее предсказание
             gesture = inference_thread.pred
 
-            # Логика дедупликации (аналогична вашему app.py)
             if gesture not in ['no', '']:
                 if not gestures_deque:
                     gestures_deque.append(gesture)
                 elif gesture != gestures_deque[-1]:
                     gestures_deque.append(gesture)
 
-            # Отправляем результат клиенту
             await websocket.send_text(json.dumps({
                 "gesture": gesture,
                 "history": list(gestures_deque)
