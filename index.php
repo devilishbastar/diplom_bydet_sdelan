@@ -17,7 +17,6 @@
 
         <h2 class="text-center mb-4">Распознавание жестов</h2>
 
-        <!-- Видео по центру -->
         <div class="d-flex justify-content-center mb-3">
             <div class="card shadow-sm">
                 <div class="card-body p-2">
@@ -26,19 +25,16 @@
             </div>
         </div>
 
-        <!-- Кнопки по центру, все в одном тоне -->
         <div class="d-flex justify-content-center gap-2 flex-wrap mb-3">
             <button id="startBtn" class="btn btn-primary">Старт</button>
             <button id="copyBtn"  class="btn btn-primary" disabled>Копировать текст</button>
             <button id="resetBtn" class="btn btn-primary" disabled>Сбросить историю</button>
         </div>
 
-        <!-- Статус -->
         <div class="text-center mb-3">
             <span id="status" class="badge text-bg-secondary">Статус: ожидание запуска</span>
         </div>
 
-        <!-- Результаты -->
         <div class="card shadow-sm">
             <div class="card-body text-center">
                 <p class="mb-2">Текущий жест: <strong id="gesture" class="fs-5">—</strong></p>
@@ -48,7 +44,6 @@
 
     </div>
 
-    <!-- Тосты -->
     <div id="toast" class="toast align-items-center text-bg-dark border-0" role="alert" aria-live="assertive" aria-atomic="true">
         <div class="d-flex">
             <div class="toast-body" id="toastBody"></div>
@@ -137,8 +132,6 @@
                 if (text) lastText = text;
                 gestureEl.textContent = lastText || '—';
 
-                // Историю собираем ТОЛЬКО локально из новых gesture.
-                // "no" (нет жеста) в историю не добавляем.
                 const g = data.gesture;
                 if (g && g !== lastSeenGesture && g.toLowerCase() !== 'no') {
                     lastSeenGesture = g;

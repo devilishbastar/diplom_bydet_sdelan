@@ -1,15 +1,21 @@
 import onnx
+from onnx import numpy_helper
 
-model = onnx.load("S3D.onnx")
+model = onnx.load("s3d.onnx")
 
-print("Входы:")
-for inp in model.graph.input:
-    print(inp.name, inp.type.tensor_type.shape)
+# Ищем последний классификационный Conv
+for node in model.graph.node:
+    if node.name == "/model/classifier/classifier.1/Conv":
+        print("Найден классификатор!")
+        print("Входы:", list(node.input))
+        print("Выходы:", list(node.output))
 
-print("\nВыходы:")
-for out in model.graph.output:
-    print(out.name, out.type.tensor_type.shape)
-
-print("\nПоследние операции:")
-for node in model.graph.node[-15:]:
-    print(node.op_type, node.name, node.output)
+        # Проверяем веса и смещения
+        for name in node.input:
+            for initializer in model.graph.initializer:
+                if initializer.name == name:
+                    weights = numpy_helper.to_array(initializer)
+                    print(
+                        "Параметр:", name,
+                        "Размерность:", weights.shape
+                    )
