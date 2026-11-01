@@ -10,13 +10,7 @@ if platform in {"win32", "win64"}:
 
 class Predictor:
     def __init__(self, model_config):
-        """
-        Initialize the Predictor class.
 
-        Args:
-            model_config (dict): Model configuration containing path_to_model,
-                path_to_class_list, threshold, and topk values.
-        """
         self.config = model_config
         self.provider = self.config["provider"]
         self.threshold = self.config["threshold"]
@@ -26,9 +20,7 @@ class Predictor:
         self.create_labels()
 
     def create_labels(self):
-        """
-        Create a dictionary of labels from the provided path_to_class_list.
-        """
+
         with open(self.config["path_to_class_list"], "r") as f:
             labels = [line.strip() for line in f]
             labels = self.decode_preds(labels)
@@ -42,15 +34,7 @@ class Predictor:
         return exp_x / np.sum(exp_x, axis=1, keepdims=True)
 
     def predict(self, x):
-        """
-        Make a prediction using the provided input frames.
 
-        Args:
-            x (list): List of input frames.
-
-        Returns:
-            dict: Dictionary containing predicted labels and confidence values.
-        """
         clip = np.array(x).astype(np.float32) / 255.0
         clip = rearrange(clip, "t h w c -> 1 c t h w")
 
@@ -70,15 +54,7 @@ class Predictor:
         }
 
     def model_init(self, path_to_model: str) -> None:
-        """
-        Load and init the ONNX model using the provided path.
 
-        Args:
-            path_to_model (str): Path to the ONNX model file.
-
-        Returns:
-            None
-        """
         session = rt.InferenceSession(path_to_model, providers=[self.provider])
         self.input_name = session.get_inputs()[0].name
         self.output_name = session.get_outputs()[0].name
